@@ -13,16 +13,17 @@ TEMPLATE = app
 
 
 SOURCES += main.cpp\
-        mainwindow.cpp \
     sliderwidget.cpp \
     customwindow.cpp
 
-HEADERS  += mainwindow.h \
+HEADERS  += \
     sliderwidget.h \
     customwindow.h
 
-FORMS    += mainwindow.ui \
+FORMS    += \
     customwindow.ui
 
 RESOURCES += \
     resources.qrc
+
+OTHER_FILES +=

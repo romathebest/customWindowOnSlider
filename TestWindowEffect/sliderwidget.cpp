@@ -5,18 +5,23 @@
 #include <QStyleOption>
 #include <QFontDatabase>
 #include <QPropertyAnimation>
-
-#include <QDebug>
+#include <QTimer>
 
 SliderWidget::SliderWidget(QWidget *parent) :
     QWidget(parent),
     firstRun(true),
+    isMaxState(false),
     pos(0),
     isCustomWindow(false),
     animation(new QPropertyAnimation(this))
 {
     animation->setTargetObject(this);
     animation->setPropertyName("pos");
+
+    timer = new QTimer;
+    timer->setInterval(ANIMATION_TIME);
+
+    connect(timer, SIGNAL(timeout()), this, SLOT(canChangeState()));
 
     setAutoFillBackground(true);
 
@@ -30,15 +35,13 @@ SliderWidget::SliderWidget(QWidget *parent) :
 SliderWidget::~SliderWidget()
 {
     delete myFont;
+    delete timer;
     delete animation;
 }
 
 void SliderWidget::paintEvent(QPaintEvent *)
 {
-    QStyleOption opt;
-    opt.init(this);
     QPainter painter(this);
-    style()->drawPrimitive(QStyle::PE_Widget, &opt, &painter, this);
 
     int width = this->width();
     int height = this->height();
@@ -52,19 +55,7 @@ void SliderWidget::paintEvent(QPaintEvent *)
     if (firstRun)
     {
         pos = centerLeft.x();
-        currentColor = colorStart;
-    }
-
-    if (this->windowState() == Qt::WindowFullScreen)
-    {
-        if (isCustomWindow)
-        {
-            pos = centerRight.x();
-        }
-        else
-        {
-            pos = centerLeft.x();
-        }
+        currentColor = COLOR_START;
     }
 
     myFont->setPointSize(int(scaleFactor));
@@ -73,6 +64,9 @@ void SliderWidget::paintEvent(QPaintEvent *)
     painter.setPen(QPen(QColor(220, 220, 220)));
     QRect rect(0, 3 * height / 4 + radius / 2, width, QFontMetrics( *myFont ).height());
     painter.drawText( rect, Qt::AlignCenter, titleDown );
+
+    myFont->setPointSize(1.5*int(scaleFactor));
+    painter.setFont(*myFont);
 
     if (!isCustomWindow)
     {
@@ -91,9 +85,8 @@ void SliderWidget::paintEvent(QPaintEvent *)
 
         if (animation->state() == QPropertyAnimation::Running)
             return;
+
         //draw text
-        myFont->setPointSize(1.5*int(scaleFactor));
-        painter.setFont(*myFont);
         painter.drawText(centerRight, "OFF");
     }
     else
@@ -113,11 +106,9 @@ void SliderWidget::paintEvent(QPaintEvent *)
 
         if (animation->state() == QPropertyAnimation::Running)
             return;
-        //draw text
-        myFont->setPointSize(1.5*int(scaleFactor));
-        painter.setFont(*myFont);
-        painter.drawText(centerLeft, "ON");
 
+        //draw text
+        painter.drawText(centerLeft, "ON");
     }
 }
 
@@ -130,36 +121,61 @@ void SliderWidget::setPosition(int value)
 
     int r, g, b;
 
-    if (colorStart.red() < colorEnd.red())
+    if (COLOR_START.red() > COLOR_END.red())
     {
-        r = someValue * (colorStart.red() - colorEnd.red()) + colorEnd.red();
+        r = (1-someValue) * (COLOR_START.red() - COLOR_END.red()) + COLOR_END.red();
     }
     else
     {
-        r = someValue * (-colorStart.red() + colorEnd.red()) + colorStart.red();
+        r = (1-someValue) * (-COLOR_START.red() + COLOR_END.red()) + COLOR_START.red();
     }
 
-    if (colorStart.green() < colorEnd.green())
+    if (COLOR_START.green() > COLOR_END.green())
     {
-        g = someValue * (colorStart.green() - colorEnd.green()) + colorEnd.green();
+        g = (1-someValue) * (COLOR_START.green() - COLOR_END.green()) + COLOR_END.green();
     }
     else
     {
-        g = someValue * (-colorStart.green() + colorEnd.green()) + colorStart.green();
+        g = (1-someValue) * (-COLOR_START.green() + COLOR_END.green()) + COLOR_START.green();
     }
 
-    if (colorStart.blue() < colorEnd.blue())
+    if (COLOR_START.blue() > COLOR_END.blue())
     {
-        b = someValue * (colorStart.blue() - colorEnd.blue()) + colorEnd.blue();
+        b = (1-someValue) * (COLOR_START.blue() - COLOR_END.blue()) + COLOR_END.blue();
     }
     else
     {
-        b = someValue * (-colorStart.blue() + colorEnd.blue()) + colorStart.blue();
+        b = (1-someValue) * (-COLOR_START.blue() + COLOR_END.blue()) + COLOR_START.blue();
     }
+
+    if (r < 0) r=0;
+    if (g < 0) g=0;
+    if (b < 0) b=0;
 
     currentColor = QColor(r, g, b);
 
     this->repaint();
+}
+
+void SliderWidget::getMaxScreen()
+{
+    if (isCustomWindow)
+    {
+        pos = centerRight.x();
+        currentColor = COLOR_END;
+    }
+    else
+    {
+        pos = centerLeft.x();
+        currentColor = COLOR_START;
+    }
+    repaint();
+}
+
+void SliderWidget::canChangeState()
+{
+    timer->stop();
+    emit customWindowEnable(isCustomWindow);
 }
 
 int SliderWidget::position() const
@@ -192,13 +208,15 @@ void SliderWidget::mousePressEvent(QMouseEvent *event)
             animation->setStartValue(centerRight.x());
             animation->setEndValue(centerLeft.x());
         }
-        animation->setDuration(600);
+        animation->setDuration(ANIMATION_TIME);
         animation->setEasingCurve(QEasingCurve::InOutExpo);
 
         animate(true);
+
         // tigger update on animation finished
         connect(animation, SIGNAL(finished()), this, SLOT(update()));
-        emit customWindowEnable(isCustomWindow);
+
+        timer->start();
     }
     repaint();
 }
@@ -208,9 +226,12 @@ void SliderWidget::resizeEvent(QResizeEvent *)
     if (isCustomWindow)
     {
         pos = centerRight.x();
+        currentColor = COLOR_END;
     }
     else
     {
         pos = centerLeft.x();
+        currentColor = COLOR_START;
     }
+    repaint();
 }
